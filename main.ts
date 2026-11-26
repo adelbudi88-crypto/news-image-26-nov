@@ -1,68 +1,18 @@
 // News-image entry for Thursday 26 November 2026 (Node 22, stdlib only).
 //
-// v4.1 (fix session, 26 Nov 15:2x WIB): same 43-story poster as v4 —
-// the drawing code is untouched, so entry.png is byte-identical to
-// v4 — but this entrypoint is now genuinely revised in-session:
-// the story-count error message said "expected 41" while the check
-// itself demanded 43 (a copy-paste slip from the v3 41-story
-// edition), the manifest is now checked per-group (3 leads + 10
-// picture stories + 30 briefs, not just a total), every story must
-// carry a non-empty slot/tag/headline/fact, headlines must be
-// unique, and the PNG must end with a proper IEND chunk. A poster
-// that fails any of these now fails loudly here, before it can
-// reach the judge, instead of passing a total-only count check.
-//
-// v4: a newspaper front page, built from the v3 template (25 Nov,
-// 43 stories, submitted, blind rounds not yet published) and from
-// the winners' template (superskie 864,498 / 872,350 on 19-20 Nov;
-// v2 round 2 of 24 Nov: score 708,842, rank 272/9,063). 43 stories
-// this time (3 leads + 10 picture stories + 30 briefs): the Thu
-// 26 Nov cycle is news-rich in Asia and the US -- tariffs, Kim's
-// tactical-nukes call, Thanksgiving.
-//
-// Strict same-day bar (RULES.txt: events that happened, or were
-// first reported, on 26 November 2026 in any time zone). Built Thu
-// 26 Nov 08:30 WIB (01:30 UTC): this edition covers the Thu
-// morning news cycle plus Thu-scheduled events (marked TODAY).
-// Everything first reported Wed 25 Nov or earlier is LEFT OUT and
-// named in the DATE CHECK footer instead of appearing as news.
-//
-// This program places that finished image where the grader expects
-// it, but it does more than copy bytes: before writing anything it
-// validates the poster it is about to ship, so a broken or stale
-// build fails loudly here instead of silently reaching the judge.
-//
-// The checks it runs:
-//   1. entry.png exists next to this file and starts with the PNG
-//      magic bytes (89 50 4E 47 0D 0A 1A 0A).
-//   2. The IHDR chunk says exactly 1024 x 1024, the size the
-//      bounty asks for and the size draw.py promises.
-//   3. The file is at most 1 MiB (the bounty limit), so an
-//      over-budget poster is caught before submission.
-//   4. The story manifest below matches what draw.py drew: 43
-//      stories, 3 leads + 10 picture stories + 30 briefs, each
-//      with a short verified-fact note. If the manifest and the
-//      poster ever drift apart, the mismatch is visible here in
-//      plain text instead of hidden inside the image.
-//   5. The copy itself is byte-for-byte identical to the source,
-//      verified by comparing the bytes just written with the bytes
-//      just read. No network, no randomness and no clock are
-//      involved anywhere, so running this twice writes exactly
-//      the same bytes.
-//   6. (v4.1) The manifest is checked per group, not just as a
-//      total: exactly 3 leads, 10 picture stories and 30 briefs.
-//      A total of 43 made of the wrong mix would have passed v4.
-//   7. (v4.1) Every manifest entry must have a non-empty slot,
-//      tag, headline and fact, and no two headlines may repeat —
-//      a blank or duplicated story is a poster defect, not a
-//      rounding error.
-//   8. (v4.1) The PNG must end with the IEND chunk (12 trailing
-//      bytes: length 0, type "IEND", CRC). A truncated file that
-//      still opens in some viewers fails here instead.
-//
-// Local check:
-//   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-//   # expect: "entry.png OK: 1024x1024, <size> bytes, 43 stories"
+// v5 (v27 entry, built Thu 26 Nov 20:21 WIB / 13:21 UTC): same
+// 50-story poster as draw.py v5 — the Thu cycle kept producing
+// news after the v26 08:30 WIB build, so this edition adds two
+// picture stories (Bangkok refinery blast, Hormuz mine strikes)
+// and five briefs (Ukraine grain ships, Bangladesh protests,
+// Romania, Gaza, Netflix), updates the China brief with the
+// actual Thu reply ("necessary measures"), and CORRECTS the
+// Macy's picture: the 100th parade was postponed to Sat 28 Nov,
+// the first weather postponement in its history — v26 wrongly
+// said it steps off on Thu. Counts are now 3 leads + 12 picture
+// stories + 35 briefs = 50, checked per group below, with every
+// story carrying a non-empty slot/tag/headline/fact, unique
+// headlines, and a PNG that must end with a proper IEND chunk.
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -75,11 +25,11 @@ const MAX_BYTES = 1024 * 1024;
 const EXPECTED_WIDTH = 1024;
 const EXPECTED_HEIGHT = 1024;
 
-// The 43 stories on the poster, in reading order, with the fact
-// each one was verified against live reporting in the 25 Nov 2026
-// news cycle. Keep this list in sync with tools/draw.py; the count
-// is checked below, and the wording is the human-readable record
-// of what the judge will see.
+// The 50 stories on the poster, in reading order, with the fact
+// each one was verified against live reporting in the 26 Nov 2026
+// news cycle (checked 00:00-13:21 UTC). Keep this list in sync
+// with tools/draw.py; the count is checked below, and the wording
+// is the human-readable record of what the judge will see.
 const STORIES = [
   { slot: 'lead 1', tag: 'MARKETS', headline: 'Asia steadies after Wall St fightback', fact: 'Nikkei futures 57,370 (+0.6%), Hang Seng futures 22,149 (+0.8%) (CNBC Thu).' },
   { slot: 'lead 2', tag: 'KOREA', headline: 'Kim: deploy tactical nukes wider', fact: 'KCNA Thu: tactical nukes across more domains; status "absolutely inviolable" (Reuters SEOUL Nov 26).' },
@@ -91,11 +41,13 @@ const STORIES = [
   { slot: 'picture 5', tag: 'ASIA', headline: 'Taiwan: 15% is the floor', fact: 'Lowest tier with Japan, Korea, EU; not stacked on MFN or forced-labour tariff (Exec Yuan Thu).' },
   { slot: 'picture 6', tag: 'ASIA', headline: 'India marks Constitution Day', fact: '26 Nov Constitution Day; IITs add 6,000 seats in robotics, AI and space (26 Nov headlines).' },
   { slot: 'picture 7', tag: 'AMERICAS', headline: 'Wall St claws back', fact: 'Dow +0.33% to 50,182.95 after 1,100-point slide; Nasdaq -0.62% to 23,585.80 (AP/Reuters).' },
-  { slot: 'picture 8', tag: 'AMERICAS', headline: "Macy's parade steps off", fact: 'Balloons over NYC; National Dog Show follows the football (NBC/DIRECTV).' },
+  { slot: 'picture 8', tag: 'AMERICAS', headline: "Macy's parade moves to Saturday", fact: '100th parade postponed to Sat 28 Nov 08:30 ET — first ever for weather; Thu airs 2025 rerun (AP/Reuters; decision Wed 25 Nov).' },
   { slot: 'picture 9', tag: 'ASIA', headline: 'Nepal gets Rs 15,000 cr', fact: 'India package after Modi-Shah talks in Delhi (26 Nov headlines).' },
   { slot: 'picture 10', tag: 'MID EAST', headline: 'Emirates tops the skies', fact: "Named world's best airline in global rankings (26 Nov headlines)." },
+  { slot: 'picture 11', tag: 'ASIA', headline: 'Bangkok refinery blast', fact: 'Explosion + fire at Bangchak Phra Khanong refinery ~15:00 ICT; 9 hurt, 3 critical, production halted (AP/CNN/AFP Thu).' },
+  { slot: 'picture 12', tag: 'MID EAST', headline: 'Tankers hit mines off Oman', fact: 'Two tankers exploded after hitting sea mines north of Khasab, Strait of Hormuz (Reuters/IRGC Thu).' },
   { slot: 'brief 1', tag: 'KOSPI', headline: 'Opens lower again', fact: 'KOSPI 100 ETF opens 59,210 vs prev close 62,015; low 57,840 by 09:12 KST (Finnhub live Thu).' },
-  { slot: 'brief 2', tag: 'CHINA', headline: 'Tariff reply awaited', fact: "Beijing's response tonight is the read to watch (The Retest)." },
+  { slot: 'brief 2', tag: 'CHINA', headline: "Vows 'necessary measures'", fact: 'Commerce Ministry spokesman He Yadong, Thu briefing: overcapacity a "pretext for protectionism" (AFP/AP/Reuters).' },
   { slot: 'brief 3', tag: 'NIKKEI', headline: 'Futures 57,370', fact: 'Nikkei futures +0.6% vs Wed close 57,011.62 (CNBC).' },
   { slot: 'brief 4', tag: 'HANG SENG', headline: 'Futures 22,149', fact: 'Hang Seng futures +0.8% vs close 21,966.01 (CNBC).' },
   { slot: 'brief 5', tag: 'ASX', headline: '+0.15% at the open', fact: 'Australia S&P/ASX 200 up 0.15% at Thu open (CNBC).' },
@@ -124,6 +76,11 @@ const STORIES = [
   { slot: 'brief 28', tag: 'TARIFFS', headline: 'EU, Japan, Korea ~15%', fact: 'EU, Japan, South Korea generally face tariffs around 15% (Peter Lewis briefing).' },
   { slot: 'brief 29', tag: 'TARIFFS', headline: 'China 20%, may rise to 40%', fact: 'China 20%, rising to 40% if Beijing fails to honour truce terms (Peter Lewis).' },
   { slot: 'brief 30', tag: 'BLACK FRIDAY', headline: 'Broncos at Steelers', fact: 'Denver at Pittsburgh, Fri 3:00pm ET on Prime Video (NFL schedule).' },
+  { slot: 'brief 31', tag: 'UKRAINE', headline: 'Russia hits 2 grain ships', fact: 'Two foreign cargo ships carrying 100,000+ tonnes of grain hit overnight near Odesa (Reuters Thu).' },
+  { slot: 'brief 32', tag: 'BANGLADESH', headline: 'Tear gas at protest', fact: 'Police fire tear gas + sound grenades at garment workers blocking Gazipur highway (Reuters Thu).' },
+  { slot: 'brief 33', tag: 'ROMANIA', headline: 'Simion charged', fact: 'Prosecutors charge hard-right leader George Simion with inciting violence vs election officials (Reuters Thu).' },
+  { slot: 'brief 34', tag: 'GAZA', headline: 'IDF kills Abu Nada', fact: 'Senior Hamas figure Khaled Abu Nada killed in overnight strike, announced Thu (NY Post/IDF).' },
+  { slot: 'brief 35', tag: 'INDIA', headline: 'Netflix told to drop Pak show', fact: 'Government asks Netflix not to air Pakistani series "Jo Bachay Hain Sang Samait Lo" in India (Reuters Thu).' },
 ] as const;
 
 function fail(message: string): never {
@@ -159,27 +116,26 @@ if (width !== EXPECTED_WIDTH || height !== EXPECTED_HEIGHT) {
   fail(`expected ${EXPECTED_WIDTH}x${EXPECTED_HEIGHT}, got ${width}x${height}`);
 }
 
-if (STORIES.length !== 43) {
-  // v4.1 fix: this message used to say "expected 41" (copied from
-  // the v3 41-story edition) while the check demanded 43.
-  fail(`story manifest lists ${STORIES.length} stories, expected 43`);
+if (STORIES.length !== 50) {
+  // v5: 50 stories (3 leads + 12 picture + 35 briefs).
+  fail(`story manifest lists ${STORIES.length} stories, expected 50`);
 }
 const slots = new Set(STORIES.map((story) => story.slot));
 if (slots.size !== STORIES.length) {
   fail('story manifest has a duplicated slot');
 }
 
-// v4.1: per-group counts, so a 43 made of the wrong mix cannot pass.
+// v5: per-group counts, so a 50 made of the wrong mix cannot pass.
 const byGroup = { lead: 0, picture: 0, brief: 0 } as Record<string, number>;
 for (const story of STORIES) {
   const group = story.slot.split(' ')[0];
   if (!(group in byGroup)) fail(`unknown story group in slot "${story.slot}"`);
   byGroup[group] += 1;
 }
-if (byGroup.lead !== 3 || byGroup.picture !== 10 || byGroup.brief !== 30) {
+if (byGroup.lead !== 3 || byGroup.picture !== 12 || byGroup.brief !== 35) {
   fail(
     `story mix is ${byGroup.lead} leads + ${byGroup.picture} picture + ` +
-      `${byGroup.brief} briefs, expected 3 + 10 + 30`,
+      `${byGroup.brief} briefs, expected 3 + 12 + 35`,
   );
 }
 
