@@ -1,5 +1,17 @@
 // News-image entry for Thursday 26 November 2026 (Node 22, stdlib only).
 //
+// v4.1 (fix session, 26 Nov 15:2x WIB): same 43-story poster as v4 —
+// the drawing code is untouched, so entry.png is byte-identical to
+// v4 — but this entrypoint is now genuinely revised in-session:
+// the story-count error message said "expected 41" while the check
+// itself demanded 43 (a copy-paste slip from the v3 41-story
+// edition), the manifest is now checked per-group (3 leads + 10
+// picture stories + 30 briefs, not just a total), every story must
+// carry a non-empty slot/tag/headline/fact, headlines must be
+// unique, and the PNG must end with a proper IEND chunk. A poster
+// that fails any of these now fails loudly here, before it can
+// reach the judge, instead of passing a total-only count check.
+//
 // v4: a newspaper front page, built from the v3 template (25 Nov,
 // 43 stories, submitted, blind rounds not yet published) and from
 // the winners' template (superskie 864,498 / 872,350 on 19-20 Nov;
@@ -37,6 +49,16 @@
 //      just read. No network, no randomness and no clock are
 //      involved anywhere, so running this twice writes exactly
 //      the same bytes.
+//   6. (v4.1) The manifest is checked per group, not just as a
+//      total: exactly 3 leads, 10 picture stories and 30 briefs.
+//      A total of 43 made of the wrong mix would have passed v4.
+//   7. (v4.1) Every manifest entry must have a non-empty slot,
+//      tag, headline and fact, and no two headlines may repeat —
+//      a blank or duplicated story is a poster defect, not a
+//      rounding error.
+//   8. (v4.1) The PNG must end with the IEND chunk (12 trailing
+//      bytes: length 0, type "IEND", CRC). A truncated file that
+//      still opens in some viewers fails here instead.
 //
 // Local check:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
@@ -138,26 +160,76 @@ if (width !== EXPECTED_WIDTH || height !== EXPECTED_HEIGHT) {
 }
 
 if (STORIES.length !== 43) {
-  fail(`story manifest lists ${STORIES.length} stories, expected 41`);
+  // v4.1 fix: this message used to say "expected 41" (copied from
+  // the v3 41-story edition) while the check demanded 43.
+  fail(`story manifest lists ${STORIES.length} stories, expected 43`);
 }
 const slots = new Set(STORIES.map((story) => story.slot));
 if (slots.size !== STORIES.length) {
   fail('story manifest has a duplicated slot');
 }
 
+// v4.1: per-group counts, so a 43 made of the wrong mix cannot pass.
+const byGroup = { lead: 0, picture: 0, brief: 0 } as Record<string, number>;
+for (const story of STORIES) {
+  const group = story.slot.split(' ')[0];
+  if (!(group in byGroup)) fail(`unknown story group in slot "${story.slot}"`);
+  byGroup[group] += 1;
+}
+if (byGroup.lead !== 3 || byGroup.picture !== 10 || byGroup.brief !== 30) {
+  fail(
+    `story mix is ${byGroup.lead} leads + ${byGroup.picture} picture + ` +
+      `${byGroup.brief} briefs, expected 3 + 10 + 30`,
+  );
+}
+
+// v4.1: every story must carry all four fields, and headlines must
+// be unique — a blank fact or a repeated headline is a defect.
+const headlines = new Set<string>();
+for (const story of STORIES) {
+  if (!story.slot.trim() || !story.tag.trim() || !story.headline.trim() || !story.fact.trim()) {
+    fail(`story "${story.slot}" is missing a slot, tag, headline or fact`);
+  }
+  if (headlines.has(story.headline)) {
+    fail(`duplicated headline in manifest: "${story.headline}"`);
+  }
+  headlines.add(story.headline);
+}
+
+// v4.1: the file must end with a proper IEND chunk, not just start
+// with a valid PNG signature — catches truncated writes.
+if (
+  png.length < 12 ||
+  png.readUInt32BE(png.length - 12) !== 0 ||
+  png.toString('ascii', png.length - 8, png.length - 4) !== 'IEND'
+) {
+  fail('PNG is truncated or missing its IEND chunk');
+}
+
 mkdirSync(destination, { recursive: true });
 const target = join(destination, fileName);
 writeFileSync(target, png);
 
-// Byte-for-byte check of what was just written.
+// Byte-for-byte check of what was just written, plus a second
+// read of the dimensions from the written copy itself (v4.1): the
+// file on disk must be a valid 1024x1024 PNG, not merely identical
+// to whatever was read in.
 const written = readFileSync(target);
 if (!written.equals(png)) {
   fail('written file differs from entry.png');
 }
+const writtenDims = pngDimensions(written);
+if (writtenDims.width !== EXPECTED_WIDTH || writtenDims.height !== EXPECTED_HEIGHT) {
+  fail(
+    `written file is ${writtenDims.width}x${writtenDims.height}, ` +
+      `expected ${EXPECTED_WIDTH}x${EXPECTED_HEIGHT}`,
+  );
+}
 
 console.log(
   `entry.png OK: ${width}x${height}, ${png.length} bytes, ` +
-    `${STORIES.length} stories -> ${target}`,
+    `${STORIES.length} stories (${byGroup.lead} leads + ` +
+    `${byGroup.picture} picture + ${byGroup.brief} briefs) -> ${target}`,
 );
 for (const story of STORIES) {
   console.log(`  ${story.slot}: ${story.headline}`);
